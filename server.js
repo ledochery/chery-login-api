@@ -1,4 +1,3 @@
-// Basit Express tabanlı login API (kalıcı kullanıcı kaydı destekli)
 import express from "express";
 import cors from "cors";
 import fs from "fs";
@@ -7,10 +6,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Kullanıcı verileri dosyası
 const USERS_FILE = "./users.json";
 
-// Dosya yoksa oluştur ve admin hesabını ekle
+// Eğer yoksa admin oluştur
 if (!fs.existsSync(USERS_FILE)) {
   const defaultUsers = [
     { username: "levochery", password: "levent4251", role: "admin" },
@@ -19,18 +17,15 @@ if (!fs.existsSync(USERS_FILE)) {
   console.log("🆕 users.json oluşturuldu (admin: levochery)");
 }
 
-// Kullanıcıları dosyadan oku
 function loadUsers() {
-  const data = fs.readFileSync(USERS_FILE, "utf-8");
-  return JSON.parse(data);
+  return JSON.parse(fs.readFileSync(USERS_FILE, "utf-8"));
 }
 
-// Kullanıcıları dosyaya kaydet
 function saveUsers(users) {
   fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
 }
 
-// 🔹 Giriş endpointi
+// 🔹 Giriş
 app.post("/api/auth/login", (req, res) => {
   const { username, password } = req.body;
   const users = loadUsers();
@@ -40,42 +35,57 @@ app.post("/api/auth/login", (req, res) => {
   );
 
   if (!user) {
-    return res.status(401).json({ success: false, message: "Hatalı kullanıcı adı veya şifre." });
+    return res
+      .status(401)
+      .json({ success: false, message: "Hatalı kullanıcı adı veya şifre." });
   }
 
-  return res.json({
+  res.json({
     success: true,
     token: "fake-jwt-token-" + user.username,
     username: user.username,
     isAdmin: user.role === "admin",
-    message: "Giriş başarılı!",
   });
 });
 
-// 🔹 Yeni kullanıcı kaydı (sadece admin için)
-app.post("/api/auth/register", (req, res) => {
-  const { username, password, role } = req.body;
-  const users = loadUsers();
-
-  if (users.find((u) => u.username === username)) {
-    return res.status(400).json({ success: false, message: "Bu kullanıcı zaten var." });
-  }
-
-  const newUser = { username, password, role: role || "user" };
-  users.push(newUser);
-  saveUsers(users);
-
-  console.log("✅ Yeni kullanıcı eklendi:", username);
-  return res.json({ success: true, message: "Kullanıcı başarıyla eklendi." });
-});
-
-// 🔹 Tüm kullanıcıları listele (admin için)
-app.get("/api/auth/users", (req, res) => {
+// 🔹 Kullanıcı listeleme (uygulamadaki yönetici paneli için)
+app.get("/users", (req, res) => {
   const users = loadUsers().map((u) => ({
     username: u.username,
     role: u.role,
   }));
   res.json(users);
+});
+
+// 🔹 Yeni kullanıcı ekleme (yönetici panelindeki + butonu)
+app.post("/users", (req, res) => {
+  const { username, password, isAdmin } = req.body;
+  const users = loadUsers();
+
+  if (!username || !password) {
+    return res.status(400).json({ message: "Kullanıcı adı ve şifre gerekli." });
+  }
+
+  if (users.find((u) => u.username === username)) {
+    return res.status(400).json({ message: "Bu kullanıcı zaten var." });
+  }
+
+  const newUser = {
+    username,
+    password,
+    role: isAdmin ? "admin" : "user",
+  };
+
+  users.push(newUser);
+  saveUsers(users);
+  console.log("✅ Yeni kullanıcı eklendi:", username);
+
+  res.json({ message: "Kullanıcı başarıyla eklendi.", success: true });
+});
+
+// 🔹 Log endpoint (isteğe bağlı)
+app.get("/logs", (req, res) => {
+  res.json([]);
 });
 
 const PORT = process.env.PORT || 3000;
