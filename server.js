@@ -1,21 +1,41 @@
-// Basit Express tabanlı login API
+// Basit Express tabanlı login API (kalıcı kullanıcı kaydı destekli)
 import express from "express";
 import cors from "cors";
+import fs from "fs";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Tek kullanıcı: admin yetkili hesap
-const USERS = [
-  { username: "levochery", password: "levent4251", role: "admin" },
-];
+// Kullanıcı verileri dosyası
+const USERS_FILE = "./users.json";
 
-// Giriş endpointi
+// Dosya yoksa oluştur ve admin hesabını ekle
+if (!fs.existsSync(USERS_FILE)) {
+  const defaultUsers = [
+    { username: "levochery", password: "levent4251", role: "admin" },
+  ];
+  fs.writeFileSync(USERS_FILE, JSON.stringify(defaultUsers, null, 2));
+  console.log("🆕 users.json oluşturuldu (admin: levochery)");
+}
+
+// Kullanıcıları dosyadan oku
+function loadUsers() {
+  const data = fs.readFileSync(USERS_FILE, "utf-8");
+  return JSON.parse(data);
+}
+
+// Kullanıcıları dosyaya kaydet
+function saveUsers(users) {
+  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+}
+
+// 🔹 Giriş endpointi
 app.post("/api/auth/login", (req, res) => {
   const { username, password } = req.body;
+  const users = loadUsers();
 
-  const user = USERS.find(
+  const user = users.find(
     (u) => u.username === username && u.password === password
   );
 
@@ -32,17 +52,30 @@ app.post("/api/auth/login", (req, res) => {
   });
 });
 
-// Yeni kullanıcı ekleme endpointi
+// 🔹 Yeni kullanıcı kaydı (sadece admin için)
 app.post("/api/auth/register", (req, res) => {
-  const { username, password } = req.body;
+  const { username, password, role } = req.body;
+  const users = loadUsers();
 
-  if (USERS.find((u) => u.username === username)) {
+  if (users.find((u) => u.username === username)) {
     return res.status(400).json({ success: false, message: "Bu kullanıcı zaten var." });
   }
 
-  USERS.push({ username, password, role: "user" });
+  const newUser = { username, password, role: role || "user" };
+  users.push(newUser);
+  saveUsers(users);
+
   console.log("✅ Yeni kullanıcı eklendi:", username);
   return res.json({ success: true, message: "Kullanıcı başarıyla eklendi." });
+});
+
+// 🔹 Tüm kullanıcıları listele (admin için)
+app.get("/api/auth/users", (req, res) => {
+  const users = loadUsers().map((u) => ({
+    username: u.username,
+    role: u.role,
+  }));
+  res.json(users);
 });
 
 const PORT = process.env.PORT || 3000;
